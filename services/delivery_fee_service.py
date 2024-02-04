@@ -1,4 +1,7 @@
 from models.DeliveryFeeRequest import DeliveryFeeRequest
+from pydantic import validate_call
+from datetime import datetime
+import math
 
 BASE_FEE = 200
 ADDITIONAL_FEE = 100
@@ -15,12 +18,27 @@ BULK_ITEMS_THRESHOLD_2_FEE = 120
 MAX_FEE = 1500
 CART_VALUE_THRESHOLD_FOR_SURCHARGE = 1000
 
+RUSH_HOUR_DAY_OF_WEEK = 4
+RUSH_HOUR_START_HOUR = 15
+RUSH_HOUR_END_HOUR = 19
+RUSH_HOUR_FEE_MULTIPLIER = 1.2
 
-def get_small_order_surcharge(cart_value: int) -> int:
+
+@validate_call
+def _is_rush_hour(time: datetime):
+    return (
+        time.weekday() == RUSH_HOUR_DAY_OF_WEEK
+        and RUSH_HOUR_START_HOUR <= time.hour < RUSH_HOUR_END_HOUR
+    )
+
+
+@validate_call
+def _get_small_order_surcharge(cart_value: int) -> int:
     return max(CART_VALUE_THRESHOLD_FOR_SURCHARGE - cart_value, 0)
 
 
-def get_distance_fee(delivery_distance: int) -> int:
+@validate_call
+def _get_distance_fee(delivery_distance: int) -> int:
     if delivery_distance <= BASE_DISTANCE:
         return BASE_FEE
 
@@ -30,7 +48,8 @@ def get_distance_fee(delivery_distance: int) -> int:
     return BASE_FEE + (distance_over_base * ADDITIONAL_FEE)
 
 
-def get_bulk_fee(number_of_items: int) -> int:
+@validate_call
+def _get_bulk_fee(number_of_items: int) -> int:
     fee = 0
     if number_of_items > BULK_ITEMS_THRESHOLD_1:
         items_over_threshold_1 = number_of_items - BULK_ITEMS_THRESHOLD_1
@@ -42,9 +61,15 @@ def get_bulk_fee(number_of_items: int) -> int:
     return fee
 
 
+@validate_call
 def get_total_delivery_fee(request: DeliveryFeeRequest):
-    small_order_surcharge = get_small_order_surcharge(request.cart_value)
-    distance_fee = get_distance_fee(request.delivery_distance)
-    bulk_fee = get_bulk_fee(request.number_of_items)
+    small_order_surcharge = _get_small_order_surcharge(request.cart_value)
+    distance_fee = _get_distance_fee(request.delivery_distance)
+    bulk_fee = _get_bulk_fee(request.number_of_items)
 
-    return min(small_order_surcharge + distance_fee + bulk_fee, MAX_FEE)
+    fee = small_order_surcharge + distance_fee + bulk_fee
+
+    if _is_rush_hour(request.time):
+        fee *= RUSH_HOUR_FEE_MULTIPLIER
+
+    return min(fee, MAX_FEE)
