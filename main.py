@@ -12,7 +12,7 @@ def get_delivery_fee(request: DeliveryFeeRequest):
 
 
 @app.get("/deliveryfee")
-def get_delivery_fee_query_params(
+def get_delivery_fee_get_method(
     cart_value: int = Query(..., gt=0),
     delivery_distance: int = Query(..., gt=0),
     number_of_items: int = Query(..., gt=0),
